@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>랜덤박스 구성 도우미</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        .configuration-card {
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .configuration-card.active {
+            border-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 4px 14px 0 rgba(0, 118, 255, 0.39);
+        }
+        .item-list-button {
+            transition: background-color 0.2s ease-in-out;
+        }
+        .item-list-button:hover {
+            background-color: #eef2ff; /* indigo-50 */
+        }
+        /* 스크롤바 디자인 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; /* slate-100 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; /* slate-300 */
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; /* slate-400 */
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900">🎁 랜덤박스 구성 도우미</h1>
+            <p class="mt-2 text-slate-600">판매가: 3,500원 | 목표 단가: <span class="font-bold text-indigo-600">3,182원</span></p>
+        </header>
+
+        <div class="flex flex-col md:flex-row gap-8">
+
+            <!-- Left Side: Configurations -->
+            <main class="w-full md:w-2/3">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">구성 목록</h2>
+                    <button id="add-config-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                        + 새 구성 추가
+                    </button>
+                </div>
+                <div id="configurations-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Configuration cards will be inserted here -->
+                </div>
+                 <div id="no-config-message" class="text-center py-16 bg-white rounded-lg shadow-md mt-4">
+                    <p class="text-slate-500">'+ 새 구성 추가' 버튼을 눌러 첫 번째 구성을 만들어보세요!</p>
+                </div>
+            </main>
+
+            <!-- Right Side: Item List -->
+            <aside class="w-full md:w-1/3">
+                <div class="bg-white p-4 rounded-lg shadow-md sticky top-8">
+                    <h2 class="text-2xl font-bold mb-4 border-b pb-2">물품 목록</h2>
+                    <div id="item-list" class="max-h-[70vh] overflow-y-auto pr-2">
+                        <!-- Item list will be inserted here -->
+                    </div>
+                </div>
+            </aside>
+
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DATA ---
+            const targetCost = 3182;
+            // 사용자가 업로드한 엑셀 파일에서 추출한 데이터
+            const items = [
+                { name: '허니버터칩', bundleSize: 12, pricePerItem: 1306 },
+                { name: '초코비 초코바', bundleSize: 15, pricePerItem: 811 },
+                { name: '츄파춥스 사워벨트', bundleSize: 48, pricePerItem: 383 },
+                { name: '젤리스트로우', bundleSize: 80, pricePerItem: 228 },
+                { name: '미니 허니버터 아몬드', bundleSize: 15, pricePerItem: 860 },
+                { name: '프링글스 양파맛', bundleSize: 12, pricePerItem: 1003 },
+                { name: '몰티져스', bundleSize: 26, pricePerItem: 519 },
+                { name: '하리보 젤리', bundleSize: 100, pricePerItem: 159 },
+                { name: '오예스 미니', bundleSize: 24, pricePerItem: 412 },
+                { name: 'ABC 초코쿠키', bundleSize: 4, pricePerItem: 4020 },
+                { name: '트롤리 젤리', bundleSize: 50, pricePerItem: 397 },
+                { name: '에낙 라면과자', bundleSize: 60, pricePerItem: 522 },
+                { name: '로투스', bundleSize: 100, pricePerItem: 98 },
+                { name: '네모스낵', bundleSize: 30, pricePerItem: 409 },
+                { name: '포장 봉투', bundleSize: 1, pricePerItem: 100 }
+            ];
+
+            // --- STATE ---
+            let configurations = [];
+            let activeConfigurationId = null;
+            let nextConfigNumber = 1;
+
+            // --- DOM ELEMENTS ---
+            const itemListContainer = document.getElementById('item-list');
+            const configurationsContainer = document.getElementById('configurations-container');
+            const addConfigBtn = document.getElementById('add-config-btn');
+            const noConfigMessage = document.getElementById('no-config-message');
+
+            // --- FUNCTIONS ---
+
+            /** 물품 목록을 화면 오른쪽에 렌더링합니다. */
+            const renderItemList = () => {
+                itemListContainer.innerHTML = '';
+                items.forEach(item => {
+                    const button = document.createElement('button');
+                    button.className = 'item-list-button w-full text-left p-3 border-b rounded-md';
+                    button.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold">${item.name}</span>
+                            <span class="text-sm text-slate-500">${item.pricePerItem.toLocaleString()}원/개 (총 ${item.bundleSize}개)</span>
+                        </div>
+                    `;
+                    button.onclick = () => addItemToActiveConfiguration(item);
+                    itemListContainer.appendChild(button);
+                });
+            };
+
+            /** 구성 목록을 화면 왼쪽에 렌더링합니다. */
+            const renderConfigurations = () => {
+                configurationsContainer.innerHTML = '';
+                if (configurations.length === 0) {
+                    noConfigMessage.style.display = 'block';
+                    configurationsContainer.style.display = 'none';
+                } else {
+                    noConfigMessage.style.display = 'none';
+                    configurationsContainer.style.display = 'grid';
+                }
+
+                configurations.forEach(config => {
+                    const card = document.createElement('div');
+                    card.className = `configuration-card bg-white p-5 rounded-lg shadow-md border-2 ${config.id === activeConfigurationId ? 'active' : 'border-transparent'}`;
+                    card.onclick = () => setActiveConfiguration(config.id);
+
+                    const difference = config.totalCost - targetCost;
+                    const diffColor = difference > 0 ? 'text-red-500' : 'text-blue-500';
+                    const diffSign = difference > 0 ? '+' : '';
+
+                    let itemsHtml = '<p class="text-sm text-slate-500 mb-2">추가된 물품이 없습니다.</p>';
+                    if (Object.keys(config.items).length > 0) {
+                        itemsHtml = '<ul class="space-y-1 text-sm mb-3">';
+                        for (const itemName in config.items) {
+                            const item = config.items[itemName];
+                            itemsHtml += `<li class="flex justify-between"><span>${itemName} (${item.quantity}개)</span> <span>${(item.price * item.quantity).toLocaleString()}원</span></li>`;
+                        }
+                        itemsHtml += '</ul>';
+                    }
+
+                    card.innerHTML = `
+                        <h3 class="text-xl font-bold mb-3 border-b pb-2">${config.name}</h3>
+                        <div class="min-h-[80px]">${itemsHtml}</div>
+                        <div class="mt-4 pt-4 border-t">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-semibold">합계:</span>
+                                <span class="font-bold text-lg">${config.totalCost.toLocaleString()}원</span>
+                            </div>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="text-slate-600">단가 차액:</span>
+                                <span class="font-semibold ${diffColor}">${diffSign}${difference.toLocaleString()}원</span>
+                            </div>
+                        </div>
+                        <button class="delete-config-btn w-full mt-4 text-xs text-red-500 hover:text-red-700 opacity-50 hover:opacity-100 transition-opacity" data-id="${config.id}">구성 삭제</button>
+                    `;
+                    configurationsContainer.appendChild(card);
+                });
+                
+                // 삭제 버튼에 이벤트 리스너 추가
+                document.querySelectorAll('.delete-config-btn').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation(); // 카드 전체가 클릭되는 것을 방지
+                        const idToDelete = parseInt(e.target.dataset.id);
+                        deleteConfiguration(idToDelete);
+                    };
+                });
+            };
+            
+            /** 새로운 구성을 추가합니다. */
+            const addConfiguration = () => {
+                const newConfig = {
+                    id: Date.now(),
+                    name: `구성 ${nextConfigNumber++}`,
+                    items: {}, // { '빼빼로': { price: 1230, quantity: 2 }, ... }
+                    totalCost: 0,
+                };
+                configurations.push(newConfig);
+                setActiveConfiguration(newConfig.id);
+            };
+            
+            /** 특정 ID의 구성을 삭제합니다. */
+            const deleteConfiguration = (id) => {
+                configurations = configurations.filter(config => config.id !== id);
+                if (activeConfigurationId === id) {
+                    activeConfigurationId = configurations.length > 0 ? configurations[0].id : null;
+                }
+                renderConfigurations();
+            };
+
+            /** 활성화된 구성을 설정합니다. */
+            const setActiveConfiguration = (id) => {
+                activeConfigurationId = id;
+                renderConfigurations();
+            };
+
+            /** 활성화된 구성에 물품을 추가합니다. */
+            const addItemToActiveConfiguration = (item) => {
+                if (!activeConfigurationId) {
+                    alert('먼저 구성할 박스를 선택해주세요!');
+                    return;
+                }
+
+                const activeConfig = configurations.find(c => c.id === activeConfigurationId);
+                if (activeConfig) {
+                    if (activeConfig.items[item.name]) {
+                        activeConfig.items[item.name].quantity++;
+                    } else {
+                        activeConfig.items[item.name] = {
+                            price: item.pricePerItem,
+                            quantity: 1,
+                        };
+                    }
+                    recalculateTotalCost(activeConfig);
+                    renderConfigurations();
+                }
+            };
+            
+            /** 구성의 총 비용을 다시 계산합니다. */
+            const recalculateTotalCost = (config) => {
+                let total = 0;
+                for (const itemName in config.items) {
+                    const item = config.items[itemName];
+                    total += item.price * item.quantity;
+                }
+                config.totalCost = total;
+            };
+
+            // --- INITIALIZATION ---
+            addConfigBtn.addEventListener('click', addConfiguration);
+            renderItemList();
+            renderConfigurations();
+        });
+    </script>
+</body>
+</html>
+
+
+
